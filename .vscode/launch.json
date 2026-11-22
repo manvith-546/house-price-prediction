@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run web app",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Run web app (auto-reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "cwd": "${workspaceFolder}",
+      "env": { "FLASK_DEBUG": "1" },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Train model",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/train.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Predict (example)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/predict.py",
+      "args": ["--location", "Whitefield", "--sqft", "1200", "--bhk", "2", "--bath", "2"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Run tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": ["discover", "tests", "-v"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

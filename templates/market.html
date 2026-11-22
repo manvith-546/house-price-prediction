@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Prices by locality{% endblock %}
+
+{% block content %}
+<section class="intro">
+  <h1>Bengaluru prices by locality</h1>
+  <p class="lede">Typical prices across {{ stats.localities }} localities, from {{ stats.listings|num }} listings in the dataset.</p>
+</section>
+
+<dl class="figures">
+  <div><dt>Median price</dt><dd>{{ stats.median_price_lakh|money }}</dd></div>
+  <div><dt>Median rate</dt><dd>{{ stats.median_ppsf|inr }}<small> per sq.ft</small></dd></div>
+  <div><dt>Median size</dt><dd>{{ stats.median_sqft|num }}<small> sq.ft</small></dd></div>
+  <div><dt>Highest rate</dt><dd>{{ stats.priciest_ppsf|inr }}<small> in {{ stats.priciest }}</small></dd></div>
+  <div><dt>Lowest rate</dt><dd>{{ stats.cheapest_ppsf|inr }}<small> in {{ stats.cheapest }}</small></dd></div>
+</dl>
+
+<section class="block">
+  <h2>Median price by number of bedrooms</h2>
+  {% set max_bhk_price = bhk|map(attribute="median_price")|max %}
+  <div class="column-chart" role="img" aria-label="Median price by bedrooms">
+    {% for b in bhk %}
+    <div class="col" data-tip="{{ b.label }} BHK: {{ b.median_price|money }} median, {{ b.listings|num }} listings">
+      <span class="col-value">{{ b.median_price|money|replace(" Lakh", " L")|replace(" Crore", " Cr") }}</span>
+      <span class="col-bar" style="height: {{ (b.median_price / max_bhk_price * 100)|round(1) }}%"></span>
+      <span class="col-label">{{ b.label }} BHK</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="block">
+  <div class="block-head">
+    <h2>All localities</h2>
+    <label class="search">
+      <span class="visually-hidden">Search localities</span>
+      <input type="search" placeholder="Search a locality" data-filter-table="localities" autocomplete="off">
+    </label>
+  </div>
+  <p class="hint">Select a column heading to sort. Select a locality to estimate a price there.</p>
+  <div class="table-scroll">
+    <table class="data-table sortable" id="localities">
+      <thead>
+        <tr>
+          <th scope="col" aria-sort="none"><button type="button" data-sort="text">Locality</button></th>
+          <th scope="col" class="num" aria-sort="none"><button type="button" data-sort="number">Listings</button></th>
+          <th scope="col" class="num" aria-sort="none"><button type="button" data-sort="number">Median price</button></th>
+          <th scope="col" class="num rate-col" aria-sort="descending"><button type="button" data-sort="number">Median ₹ per sq.ft</button></th>
+          <th scope="col" class="num" aria-sort="none"><button type="button" data-sort="number">Median size</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in table %}
+        <tr data-name="{{ r.location|lower }}">
+          <td data-value="{{ r.location|lower }}">
+            <a href="{{ url_for('index', location=r.location) }}">{{ "Other areas" if r.location == "other" else r.location }}</a>
+          </td>
+          <td class="num" data-value="{{ r.listings }}">{{ r.listings|num }}</td>
+          <td class="num" data-value="{{ r.median_price }}">{{ r.median_price|money }}</td>
+          <td class="num rate-col" data-value="{{ r.median_ppsf }}">
+            <span class="rate">
+              <span class="microbar"><span style="width: {{ (r.median_ppsf / max_ppsf * 100)|round(1) }}%"></span></span>
+              <span class="rate-num">{{ r.median_ppsf|num }}</span>
+            </span>
+          </td>
+          <td class="num" data-value="{{ r.median_sqft }}">{{ r.median_sqft|num }} sq.ft</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="empty-filter" hidden>No locality matches that search.</p>
+  </div>
+</section>
+{% endblock %}

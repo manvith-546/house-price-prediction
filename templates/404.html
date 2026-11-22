@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Page not found{% endblock %}
+{% block content %}
+<section class="intro narrow">
+  <h1>This page doesn’t exist</h1>
+  <p class="lede">The address may be mistyped, or the page was moved.</p>
+  <p><a class="btn-primary inline" href="{{ url_for('index') }}">Estimate a price</a></p>
+</section>
+{% endblock %}

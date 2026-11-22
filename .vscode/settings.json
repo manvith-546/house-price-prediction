@@ -1,0 +1,18 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "python.testing.unittestEnabled": true,
+  "python.testing.pytestEnabled": false,
+  "python.testing.unittestArgs": ["-v", "-s", "./tests", "-p", "test_*.py"],
+  "python.analysis.extraPaths": ["./src"],
+  "jupyter.notebookFileRoot": "${workspaceFolder}",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.ipynb_checkpoints": true
+  },
+  "files.associations": {
+    "templates/*.html": "jinja-html"
+  },
+  "editor.rulers": [100],
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
+}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}How the estimate is made{% endblock %}
+
+{% set fig_titles = {
+  "01_price_distribution.png": "Price distribution",
+  "02_price_vs_area.png": "Price against area",
+  "03_top_locations_price_per_sqft.png": "Most expensive localities",
+  "04_price_by_bhk.png": "Price by bedrooms",
+  "05_correlation_heatmap.png": "Correlation between features",
+  "06_model_comparison.png": "Model comparison",
+  "07_actual_vs_predicted.png": "Actual against predicted price",
+  "08_residuals.png": "Prediction errors",
+  "09_feature_importance.png": "Feature importance",
+} %}
+
+{% block content %}
+<section class="intro">
+  <h1>How the estimate is made</h1>
+  <p class="lede">A {{ info.model_name }} model, trained on {{ info.train_rows|num }} houses and then tested on
+    {{ info.test_rows|num }} houses it had never seen. Trained {{ info.trained_at }}.</p>
+</section>
+
+<dl class="figures">
+  <div><dt>R² score</dt><dd>{{ "%.3f"|format(info.metrics_test.R2) }}</dd><dd class="fig-note">explains {{ (info.metrics_test.R2 * 100)|round(1) }}% of price differences</dd></div>
+  <div><dt>Average error</dt><dd>{{ "%.1f"|format(info.metrics_test.MAPE_percent) }}%</dd><dd class="fig-note">mean absolute percentage error</dd></div>
+  <div><dt>Average difference</dt><dd>{{ info.metrics_test.MAE_lakh|money }}</dd><dd class="fig-note">mean absolute error</dd></div>
+  <div><dt>Cross-validation R²</dt><dd>{{ "%.3f"|format(info.cv_r2) if info.cv_r2 is defined else "–" }}</dd><dd class="fig-note">average of 5 training folds</dd></div>
+</dl>
+
+<div class="two-col">
+  {% if info.comparison %}
+  <section class="block">
+    <h2>Models compared</h2>
+    <p class="hint">Six regression models were trained on the same data. The one with the best cross-validation score is used.</p>
+    {% set best_r2 = info.comparison|map(attribute="Test_R2")|max %}
+    <table class="data-table">
+      <thead><tr><th scope="col">Model</th><th scope="col">R² on test houses</th><th scope="col" class="num">Avg error</th></tr></thead>
+      <tbody>
+        {% for m in info.comparison %}
+        <tr{% if m.Model == info.model_name %} class="is-chosen"{% endif %}>
+          <td>{{ m.Model }}{% if m.Model == info.model_name %} <span class="badge">Chosen</span>{% endif %}</td>
+          <td>
+            <span class="rate">
+              <span class="microbar wide"><span style="width: {{ ([m.Test_R2, 0]|max / best_r2 * 100)|round(1) }}%"></span></span>
+              <span class="rate-num">{{ "%.3f"|format(m.Test_R2) }}</span>
+            </span>
+          </td>
+          <td class="num">{{ "%.1f"|format(m.Test_MAPE_percent) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if importance %}
+  <section class="block">
+    <h2>What drives the price</h2>
+    <p class="hint">How much accuracy (R²) drops when the model can’t use that detail. Bigger means more important.</p>
+    <ul class="hbars">
+      {% for name, value in importance %}
+      <li data-tip="{{ name }}: R² drops by {{ '%.3f'|format(value) }}">
+        <span class="hbar-label">{{ name }}</span>
+        <span class="hbar-track"><span class="hbar" style="width: {{ (value / max_importance * 100)|round(1) }}%"></span></span>
+        <span class="hbar-value">{{ "%.3f"|format(value) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>
+
+<section class="block">
+  <h2>From raw listing to estimate</h2>
+  <ol class="steps">
+    <li><p><strong>Clean the listings.</strong> Remove duplicates, turn “2 BHK” into 2 and “1100 - 1300” sq.ft into 1,200, convert other units, and drop impossible values such as 6 bedrooms in 600 sq.ft.</p></li>
+    <li><p><strong>Remove price outliers per locality.</strong> A listing whose rate per sq.ft is far from the rest of its locality (outside 1.5 × IQR) is left out.</p></li>
+    <li><p><strong>Prepare the features.</strong> Fill missing values, take the log of the area, scale the numbers and one-hot encode location and area type.</p></li>
+    <li><p><strong>Learn log(price).</strong> Prices are skewed, so the model predicts the log of the price and converts it back.</p></li>
+    <li><p><strong>Pick the best model.</strong> Six models are compared with 5-fold cross-validation, the best is tuned with grid search when it has settings to tune.</p></li>
+    <li><p><strong>Test on unseen houses.</strong> The final score comes from the 20% of houses kept aside from the start.</p></li>
+  </ol>
+</section>
+
+{% if figures %}
+<section class="block">
+  <h2>Charts from training</h2>
+  <p class="hint">Created by <code>python src/train.py</code>. Select a chart to open it full size.</p>
+  <div class="gallery">
+    {% for f in figures %}
+    <figure>
+      <a href="{{ url_for('figure', name=f) }}" target="_blank" rel="noopener"><img src="{{ url_for('figure', name=f) }}" alt="{{ fig_titles.get(f, f) }}"></a>
+      <figcaption>{{ fig_titles.get(f, f) }}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="block" id="api">
+  <h2>Use the API</h2>
+  <p class="hint">Send house details as JSON and get the estimate back. Only location, total_sqft, bhk and bath are required.</p>
+  <div class="two-col code-cols">
+    <div>
+      <h3>curl</h3>
+<pre><code>curl -X POST {{ host_url }}/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{"location": "Whitefield", "total_sqft": 1200,
+       "bhk": 2, "bath": 2, "balcony": 1,
+       "area_type": "Super built-up Area",
+       "ready_to_move": true}'</code></pre>
+    </div>
+    <div>
+      <h3>Python</h3>
+<pre><code>import requests
+
+house = {"location": "Whitefield", "total_sqft": 1200,
+         "bhk": 2, "bath": 2}
+r = requests.post("{{ host_url }}/api/predict", json=house)
+print(r.json()["price_text"])</code></pre>
+    </div>
+  </div>
+  <table class="data-table endpoints">
+    <thead><tr><th scope="col">Endpoint</th><th scope="col">Returns</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/predict</code></td><td>Estimated price, likely range and price per sq.ft</td></tr>
+      <tr><td><code>GET /api/locations</code></td><td>Listings, median price, rate and size for every locality</td></tr>
+      <tr><td><code>GET /api/info</code></td><td>Model name, accuracy, features and accepted values</td></tr>
+      <tr><td><code>GET /api/health</code></td><td>Whether the model is loaded</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="block about-data">
+  <h2>About the data</h2>
+  <p>The model uses the columns of the public Kaggle “Bengaluru House Price Data” set: area type, availability,
+    location, size, society, total area, bathrooms, balconies and price (in lakh). The repository ships with a synthetic
+    sample in that format so it runs offline. To use the real listings, replace <code>data/Bengaluru_House_Data.csv</code>
+    with the Kaggle file and run <code>python src/train.py</code>.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Model not ready{% endblock %}
+{% block content %}
+<section class="intro narrow">
+  <h1>The model isn’t trained yet</h1>
+  <p class="lede">{{ setup_error }}</p>
+  <p>Open a terminal in the project folder and run:</p>
+  <pre><code>python src/train.py</code></pre>
+  <p>Then refresh this page. Starting the app with <code>python app.py</code> also trains it automatically.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Estimate a price{% endblock %}
+
+{% set examples = [
+  {"label": "2 BHK flat in Whitefield", "location": "Whitefield", "total_sqft": 1200, "bhk": 2, "bath": 2, "balcony": 1, "area_type": "Super built-up Area"},
+  {"label": "3 BHK flat in Koramangala", "location": "Koramangala", "total_sqft": 1650, "bhk": 3, "bath": 3, "balcony": 2, "area_type": "Super built-up Area"},
+  {"label": "4 BHK house in Hebbal", "location": "Hebbal", "total_sqft": 2400, "bhk": 4, "bath": 4, "balcony": 2, "area_type": "Plot Area"},
+] %}
+
+{% block content %}
+<section class="intro">
+  <h1>What is this house worth?</h1>
+  <p class="lede">Get an estimated price for a home in Bengaluru from its location, size and features.
+    The model learned from {{ listings|num }} listings.</p>
+</section>
+
+<div class="workspace">
+  <!-- ======================= house details ======================= -->
+  <form class="sheet" method="post" action="{{ url_for('index') }}" novalidate>
+    <h2 class="sheet-title">House details</h2>
+
+    <div class="field">
+      <label for="location">Location</label>
+      <select id="location" name="location">
+        {% for loc in info.locations %}
+          <option value="{{ loc }}" {% if loc == form.location %}selected{% endif %}>{{ "Other area (not listed)" if loc == "other" else loc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="total_sqft">Total area</label>
+      <div class="input-unit">
+        <input id="total_sqft" name="total_sqft" type="number" inputmode="numeric" min="300" max="30000" step="10" value="{{ form.total_sqft }}" required>
+        <span aria-hidden="true">sq.ft</span>
+      </div>
+    </div>
+
+    <div class="field-row">
+      {% for name, label, low, high in [("bhk", "Bedrooms", 1, 10), ("bath", "Bathrooms", 1, 12), ("balcony", "Balconies", 0, 5)] %}
+      <div class="field">
+        <label for="{{ name }}">{{ label }}</label>
+        <div class="stepper">
+          <button type="button" data-step="-1" aria-label="Fewer {{ label|lower }}" tabindex="-1">&minus;</button>
+          <input id="{{ name }}" name="{{ name }}" type="number" inputmode="numeric" min="{{ low }}" max="{{ high }}" value="{{ form[name] }}" required>
+          <button type="button" data-step="1" aria-label="More {{ label|lower }}" tabindex="-1">+</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <fieldset class="field">
+      <legend>How the area is measured</legend>
+      <div class="segmented">
+        {% for t in area_types %}
+        <label>
+          <input type="radio" name="area_type" value="{{ t }}" data-help="{{ area_help.get(t, '') }}" {% if t == form.area_type %}checked{% endif %}>
+          <span>{{ t.replace(" Area", "") }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <p class="hint" data-area-hint>{{ area_help.get(form.area_type, "") }}</p>
+    </fieldset>
+
+    <fieldset class="field">
+      <legend>Availability</legend>
+      <div class="segmented two">
+        <label><input type="radio" name="ready_to_move" value="1" {% if form.ready_to_move == "1" %}checked{% endif %}><span>Ready to move</span></label>
+        <label><input type="radio" name="ready_to_move" value="0" {% if form.ready_to_move == "0" %}checked{% endif %}><span>Under construction</span></label>
+      </div>
+    </fieldset>
+
+    <button class="btn-primary" type="submit">Estimate price</button>
+  </form>
+
+  <!-- ======================= valuation ======================= -->
+  <section class="valuation{% if result %} has-result{% endif %}" aria-live="polite" aria-label="Estimated price">
+    {% if error %}
+      <div class="notice notice-error">
+        <h2>Check the house details</h2>
+        <p>{{ error }}</p>
+      </div>
+
+    {% elif result %}
+      <p class="v-label">Estimated price</p>
+      <p class="v-price">{{ result.price_text }}</p>
+
+      <div class="dimline" aria-hidden="true"><span class="dim-end"></span><span class="dim-dot"></span><span class="dim-end"></span></div>
+      <div class="dim-labels">
+        <span>{{ result.range_low_text }}</span>
+        <span class="dim-caption">likely range</span>
+        <span>{{ result.range_high_text }}</span>
+      </div>
+
+      <p class="v-rate">
+        <strong>{{ result.price_per_sqft|inr }}</strong> per sq.ft
+        {%- if vs_typical is not none %},
+          {% if vs_typical|abs < 2 %}in line with
+          {% else %}<span class="{{ 'up' if vs_typical > 0 else 'down' }}">{{ vs_typical|abs|round|int }}% {{ "above" if vs_typical > 0 else "below" }}</span>
+          {% endif %}
+          the typical rate {{ "in " ~ form.location if result.known_location and result.location_used != "other" else "across other areas" }} ({{ typical_ppsf|inr }}).
+        {%- endif %}
+      </p>
+      {% if not result.known_location %}
+        <p class="hint">“{{ form.location }}” isn’t in the training data, so the average of smaller localities was used.</p>
+      {% endif %}
+
+      <div class="v-section">
+        <h2>Price at other sizes</h2>
+        <p class="hint">Same location and features; only the total area changes. Hover over or tap the line to read values.</p>
+        <div class="chart-wrap">{{ chart }}</div>
+      </div>
+
+      <div class="v-section">
+        <h2>Similar houses {{ "in " ~ form.location if result.location_used != "other" else "in other areas" }}</h2>
+        <p class="hint">Closest matches by bedrooms and size from the dataset the model learned from.</p>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th scope="col">Area</th><th scope="col">BHK</th><th scope="col">Bath</th><th scope="col">Type</th><th scope="col" class="num">Price</th><th scope="col" class="num">₹ per sq.ft</th></tr></thead>
+            <tbody>
+              {% for h in similar %}
+              <tr>
+                <td>{{ h.total_sqft|num }} sq.ft</td>
+                <td>{{ h.bhk }}</td>
+                <td>{{ h.bath|int if h.bath == h.bath else "–" }}</td>
+                <td>{{ h.area_type.replace(" Area", "") }}</td>
+                <td class="num">{{ h.price|money }}</td>
+                <td class="num">{{ h.price_per_sqft|num }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="v-foot">Estimated by the {{ result.model_name }} model. The range covers its average error of {{ "%.1f"|format(info.metrics_test.MAPE_percent) }}% on houses it hadn't seen.</p>
+
+    {% else %}
+      <p class="v-label">Estimated price</p>
+      <p class="v-price is-empty" aria-hidden="true">₹ –</p>
+      <div class="dimline is-empty" aria-hidden="true"><span class="dim-end"></span><span class="dim-end"></span></div>
+      <p class="empty-copy">Fill in the house details and select <strong>Estimate price</strong>. You’ll see the price, a likely range,
+        how the price changes with size and similar houses nearby.</p>
+      <div class="examples">
+        <p class="hint">Or try an example</p>
+        <ul>
+          {% for ex in examples if ex.location in info.locations %}
+          <li><a href="{{ url_for('index', location=ex.location, total_sqft=ex.total_sqft, bhk=ex.bhk, bath=ex.bath, balcony=ex.balcony, area_type=ex.area_type, ready_to_move=1) }}">{{ ex.label }}, {{ ex.total_sqft|num }} sq.ft</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+{% if history %}
+<section class="history" aria-labelledby="history-title">
+  <div class="history-head">
+    <h2 id="history-title">Your recent estimates</h2>
+    <form method="post" action="{{ url_for('clear_history') }}"><button class="btn-link" type="submit">Clear list</button></form>
+  </div>
+  <ul>
+    {% for h in history %}
+    <li>
+      <a href="{{ url_for('index', location=h.location, total_sqft=h.total_sqft, bhk=h.bhk, bath=h.bath, balcony=h.balcony, area_type=h.area_type, ready_to_move=h.ready_to_move) }}">
+        <span>{{ h.bhk }} BHK, {{ h.total_sqft|num }} sq.ft</span>
+        <span class="h-loc">{{ "Other area" if h.location == "other" else h.location }}</span>
+        <strong>{{ h.price_text }}</strong>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

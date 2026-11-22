@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Estimate a price{% endblock %} | Bengaluru House Price Predictor</title>
+  <meta name="description" content="Estimate the price of a house in Bengaluru from its location, size and features with a machine-learning model.">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script>
+    /* apply the saved theme before the page paints */
+    (function () {
+      try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-bar">
+      <a class="brand" href="{{ url_for('index') }}">
+        <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="3" width="22" height="22" rx="1.5"/>
+          <path d="M14 3v9M3 15h8M18 25v-6h7"/>
+          <path class="door" d="M11 15a4 4 0 0 1 4 4"/>
+        </svg>
+        <span>Bengaluru House Price Predictor</span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="{{ url_for('index') }}" {% if nav == 'index' %}aria-current="page"{% endif %}>Estimate</a>
+        <a href="{{ url_for('market_page') }}" {% if nav == 'market_page' %}aria-current="page"{% endif %}>Market</a>
+        <a href="{{ url_for('model_page') }}" {% if nav == 'model_page' %}aria-current="page"{% endif %}>Model</a>
+      </nav>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="wrap site-footer">
+    <p>Built with Python, Pandas, Scikit-learn and Flask. Prices are machine-learning estimates, not a professional valuation.</p>
+  </footer>
+
+  <div class="chart-tip" role="tooltip" hidden></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

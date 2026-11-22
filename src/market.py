@@ -27,10 +27,15 @@ def clear_cache():
     location_table.cache_clear()
 
 
+MIN_LISTINGS_FOR_RANKING = 10  # a locality with fewer listings is too small to call "highest" or "lowest"
+
+
 def overall_stats() -> dict:
     df = market_data()
     named = df[df["location"] != "other"]
-    by_loc = named.groupby("location")["price_per_sqft"].median().sort_values()
+    by_loc = named.groupby("location")["price_per_sqft"].median()
+    counts = named.groupby("location")["price"].size()
+    by_loc = by_loc[counts.reindex(by_loc.index) >= MIN_LISTINGS_FOR_RANKING].sort_values()
     return {
         "listings": int(len(df)),
         "median_price_lakh": float(df["price"].median()),

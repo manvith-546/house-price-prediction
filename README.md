@@ -22,7 +22,7 @@ Python, Pandas and Scikit-learn and has a Flask website.
 - [Results](#results)
 - [More screenshots](#more-screenshots)
 - [JSON API](#json-api)
-- [Use the real Kaggle dataset](#use-the-real-kaggle-dataset)
+- [The dataset](#the-dataset)
 - [Tests and CI](#tests-and-ci)
 - [Run with Docker (optional)](#run-with-docker-optional)
 - [Troubleshooting](#troubleshooting)
@@ -99,7 +99,8 @@ Then press **Ctrl+Shift+P → "Python: Select Interpreter"** and pick the one in
 ```bash
 python app.py
 ```
-Open **http://127.0.0.1:5000**. The first start trains the model (about a minute) if it isn't trained yet.
+Open **http://127.0.0.1:5000**. A trained model is included, so the app starts straight away. If it can't be loaded
+(for example a different scikit-learn version), the app trains a new one first, which takes about 3-4 minutes.
 
 ### Other ways to run
 | What | How |
@@ -119,7 +120,6 @@ python src/predict.py --location "Indira Nagar" --sqft 1800 --bhk 3 --bath 3 \
                       --balcony 2 --area-type "Built-up Area" --under-construction
 python src/predict.py --list-locations
 python -m unittest discover tests -v      # run the tests
-python data/generate_dataset.py           # re-create the sample dataset
 ```
 
 ---
@@ -132,8 +132,7 @@ house-price-prediction/
 ├── House_Price_Prediction.ipynb  # step-by-step notebook
 ├── requirements.txt
 ├── data/
-│   ├── Bengaluru_House_Data.csv  # raw data (13,320 rows, Kaggle format)
-│   └── generate_dataset.py       # creates the sample dataset
+│   └── Bengaluru_House_Data.csv  # real listings from Kaggle (13,320 rows)
 ├── src/
 │   ├── data_prep.py              # loading, cleaning, feature engineering
 │   ├── train.py                  # EDA charts, model comparison, tuning, saving
@@ -162,8 +161,9 @@ house-price-prediction/
 ## How it works
 
 ### 1. Data
-Same 9 columns as the Kaggle **Bengaluru House Price Data**:
+The real **Bengaluru House Price Data** from Kaggle: 13,320 listings with 9 columns:
 `area_type, availability, location, size, society, total_sqft, bath, balcony, price` (price in ₹ lakh).
+After cleaning, 11,198 listings in 248 localities remain.
 
 ### 2. Cleaning (`src/data_prep.py`)
 1. Remove duplicate rows
@@ -172,8 +172,11 @@ Same 9 columns as the Kaggle **Bengaluru House Price Data**:
 4. `size` → `bhk` (number of bedrooms)
 5. `total_sqft` → number: ranges averaged, other units converted
 6. `availability` → `ready_to_move` (1 / 0)
-7. Localities with fewer than 10 houses → `"other"`
-8. Outliers removed: under 300 sq.ft per bedroom, bathrooms > bedrooms + 2,
+7. Keep only listings the web app accepts: 300-30,000 sq.ft, up to 10 bedrooms and 12 bathrooms.
+   The real data has a few impossible entries (for example a 2 BHK of 1,306,800 sq.ft after
+   converting "30Acres") that would only confuse the model
+8. Localities with fewer than 10 houses → `"other"`
+9. Outliers removed: under 300 sq.ft per bedroom, bathrooms > bedrooms + 2,
    and price per sq.ft outside 1.5 × IQR **of its own locality**
 
 ### 3. Features and pipeline (`src/train.py`)
@@ -187,6 +190,11 @@ Same 9 columns as the Kaggle **Bengaluru House Price Data**:
 Prices are right-skewed and grow in proportion to area, so working on a log scale turns
 the relationship into a straight line.
 
+**A bigger house is never cheaper.** Tree models can make the price dip when the area grows a
+little. The Gradient Boosting model is therefore given a *monotonic constraint* on the area:
+with everything else equal, more area never lowers the price. This keeps the "price at other
+sizes" chart sensible and cost no accuracy.
+
 ### 4. Model selection
 80% of houses are used for training and 20% are kept aside. Each model is scored with
 5-fold cross-validation on the training data, the best one is tuned with `GridSearchCV`
@@ -196,25 +204,37 @@ the relationship into a straight line.
 
 ## Results
 
-On the included dataset: 9,848 training houses, 2,463 test houses.
+Real Kaggle data: 8,958 training houses and 2,240 test houses (after cleaning). The models are
+ranked by 5-fold cross-validation on the training houses:
 
 | Model | CV R² | Test R² | MAE (₹ lakh) | RMSE (₹ lakh) | MAPE |
 |---|---|---|---|---|---|
-| **Linear Regression** ✅ | **0.904** | **0.909** | **18.94** | **29.19** | **13.6%** |
-| Ridge Regression | 0.902 | 0.907 | 19.02 | 29.48 | 13.6% |
-| Gradient Boosting | 0.891 | 0.887 | 20.30 | 32.47 | 14.2% |
-| Lasso Regression | 0.884 | 0.889 | 20.08 | 32.15 | 14.1% |
-| Random Forest | 0.739 | 0.751 | 26.43 | 48.23 | 17.8% |
-| Decision Tree | 0.605 | 0.617 | 34.68 | 59.82 | 24.5% |
+| **Gradient Boosting** ✅ | **0.760** | 0.685 | **20.43** | 52.29 | **20.2%** |
+| Random Forest | 0.695 | 0.626 | 22.30 | 56.92 | 21.7% |
+| Linear Regression | 0.694 | **0.819** | 20.73 | **39.57** | 21.1% |
+| Ridge Regression | 0.682 | 0.815 | 20.74 | 40.04 | 21.0% |
+| Decision Tree | 0.628 | 0.597 | 25.13 | 59.11 | 24.8% |
+| Lasso Regression | 0.556 | 0.714 | 23.73 | 49.82 | 23.2% |
+
+**Final model** (Gradient Boosting after `GridSearchCV`): CV R² **0.775**; on the untouched test
+houses R² **0.698**, average error **₹19.4 lakh** (MAE), RMSE ₹51.1 lakh and about **19%** off on
+average (MAPE).
 
 - **R²** – share of price differences the model explains (1.0 = perfect)
 - **MAE / RMSE** – average error in ₹ lakh (RMSE punishes big misses more)
 - **MAPE** – average error in percent; the web app uses it for the "likely range"
 
-**Why linear regression wins:** on a log scale, *price ≈ area × locality rate × small
-adjustments*, which is a straight line. Tree models need many splits to learn 70+ locality
-effects from one-hot columns. **Most important features:** total area, then location, then
-area type.
+**Reading the numbers honestly**
+- **Why Gradient Boosting was chosen:** it has the best cross-validation score, which averages 5
+  different splits and is more reliable than one test split. It also has the lowest average error
+  (MAE and MAPE).
+- **Why Linear Regression has a higher test R²:** prices are heavy-tailed. A few very expensive
+  homes in the test set dominate R² and RMSE, and the linear model happens to miss those by less
+  on this one split. The typical error is about the same for both.
+- **What to expect:** these are asking prices from listings, with no floor, building age or
+  amenities, so an average error of about 19% is realistic for this dataset. Treat the estimate as
+  a guide, not a valuation.
+- **Most important features:** total area, then location, then bathrooms and area type.
 
 ---
 
@@ -238,7 +258,7 @@ curl -X POST http://127.0.0.1:5000/api/predict \
      -d '{"location": "Whitefield", "total_sqft": 1200, "bhk": 2, "bath": 2, "balcony": 1, "area_type": "Super built-up Area", "ready_to_move": true}'
 ```
 ```json
-{"price_lakh": 99.18, "price_text": "₹99.18 Lakh", "range_text": "₹85.67 Lakh - ₹1.13 Crore", "price_per_sqft": 8265, "...": "..."}
+{"price_lakh": 58.07, "price_text": "₹58.07 Lakh", "range_text": "₹46.98 Lakh - ₹69.17 Lakh", "price_per_sqft": 4840, "...": "..."}
 ```
 
 | Endpoint | Returns |
@@ -250,18 +270,15 @@ curl -X POST http://127.0.0.1:5000/api/predict \
 
 ---
 
-## Use the real Kaggle dataset
+## The dataset
 
-The included `data/Bengaluru_House_Data.csv` is a **synthetic sample** made by
-`data/generate_dataset.py`. It has the same columns and the same kinds of messy values as
-the real file, so the project runs offline. To use real listings:
+`data/Bengaluru_House_Data.csv` is the public Kaggle dataset
+[Bengaluru House Price Data](https://www.kaggle.com/datasets/amitabhajoy/bengaluru-house-price-data)
+(13,320 listings, 9 columns). The data belongs to its original author; see the Kaggle page for
+its terms before reusing it elsewhere.
 
-1. Download **Bengaluru House Price Data** from Kaggle:
-   https://www.kaggle.com/datasets/amitabhajoy/bengaluru-house-price-data
-2. Replace `data/Bengaluru_House_Data.csv` with the downloaded file.
-3. Run `python src/train.py`.
-
-No code changes are needed. Expect lower scores on real data, which is noisier.
+To use a newer or different file with the same columns, replace the CSV and run
+`python src/train.py`. No code changes are needed.
 
 ---
 
@@ -297,7 +314,7 @@ Settings can be changed with environment variables: `HOST`, `PORT`, `FLASK_DEBUG
 | `'python' is not recognized` | Reinstall Python and tick **Add Python to PATH**, or use `py` instead of `python` |
 | `venv\Scripts\activate` is blocked in PowerShell | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt |
 | `ModuleNotFoundError` | Activate the venv and run `pip install -r requirements.txt`; select the venv interpreter in VS Code |
-| "The saved model could not be loaded" | Your scikit-learn version differs; run `python src/train.py` (or just `python app.py`) |
+| "The saved model could not be loaded" | Your scikit-learn version differs; run `python src/train.py` (or just `python app.py`). Training takes about 3-4 minutes |
 | Port 5000 is already in use | `set PORT=5050` (Windows) or `PORT=5050 python app.py` (Mac/Linux) |
 | Charts don't open a window | That's expected; they are saved in `reports/figures/` |
 
@@ -313,5 +330,5 @@ Settings can be changed with environment variables: `HOST`, `PORT`, `FLASK_DEBUG
 
 ## License and credits
 - Code: [MIT License](LICENSE)
-- Dataset format: [Bengaluru House Price Data](https://www.kaggle.com/datasets/amitabhajoy/bengaluru-house-price-data) on Kaggle
+- Dataset: [Bengaluru House Price Data](https://www.kaggle.com/datasets/amitabhajoy/bengaluru-house-price-data) on Kaggle
 - Fonts: [Fira Sans](https://fonts.google.com/specimen/Fira+Sans) and [Bitter](https://fonts.google.com/specimen/Bitter), SIL Open Font License (`static/fonts/`)

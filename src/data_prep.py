@@ -3,8 +3,7 @@ data_prep.py
 ------------
 Loading + cleaning + feature engineering for the Bengaluru house price data.
 
-Works on both the synthetic file created by data/generate_dataset.py and the
-real Kaggle file "Bengaluru_House_Data.csv" (same columns).
+Works on the real Kaggle file "Bengaluru_House_Data.csv" (13,320 listings).
 
 Cleaning steps
   1. Remove duplicate rows
@@ -14,7 +13,9 @@ Cleaning steps
   5. total_sqft ("1200", "1100 - 1300", "120Sq. Yards") -> numeric sq.ft
   6. availability ("Ready To Move", "18-Dec")  ->  ready_to_move (1/0)
   7. Tidy text columns, group rare locations (< MIN_LOCATION_COUNT rows) into "other"
-  8. Remove outliers:
+  8. Keep only listings the web app accepts (300-30,000 sq.ft, up to 10
+     bedrooms, up to 12 bathrooms) - this drops impossible entries
+  9. Remove outliers:
        * less than 300 sq.ft per bedroom (data-entry mistakes)
        * more bathrooms than bedrooms + 2
        * price-per-sqft outside the 1.5 x IQR range of its own location
@@ -37,6 +38,13 @@ TARGET = "price"  # in lakhs
 MIN_LOCATION_COUNT = 10
 MIN_SQFT_PER_BHK = 300
 
+# Only keep listings in the range the web app accepts (see predict.LIMITS).
+# The real data has a few impossible entries (for example a 2 BHK of
+# 1,306,800 sq.ft after converting "30Acres"), which would only confuse the model.
+MIN_SQFT, MAX_SQFT = 300, 30000
+MAX_BHK = 10
+MAX_BATH = 12
+
 # unit conversions to square feet for odd entries in total_sqft
 UNIT_TO_SQFT = {
     "sq. meter": 10.7639,
@@ -54,7 +62,9 @@ def load_raw(path=RAW_DATA_PATH) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
             f"Dataset not found at {path}.\n"
-            "Run:  python data/generate_dataset.py   (or put the Kaggle CSV there)"
+            "Download 'Bengaluru House Price Data' from "
+            "https://www.kaggle.com/datasets/amitabhajoy/bengaluru-house-price-data "
+            "and save the CSV there."
         )
     return pd.read_csv(path)
 
@@ -122,6 +132,13 @@ def clean_data(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     df["total_sqft"] = df["total_sqft"].apply(sqft_to_number)
     df = df.dropna(subset=["bhk", "total_sqft"])
     step("After converting size and total_sqft", df)
+
+    in_range = (df["total_sqft"].between(MIN_SQFT, MAX_SQFT)
+                & (df["bhk"] <= MAX_BHK)
+                & (df["bath"].isna() | (df["bath"] <= MAX_BATH)))
+    df = df[in_range]
+    step(f"After keeping sizes the app accepts ({MIN_SQFT}-{MAX_SQFT:,} sqft, "
+         f"<= {MAX_BHK} bedrooms)", df)
 
     df["ready_to_move"] = (df["availability"].astype(str).str.strip().str.lower()
                            .isin(["ready to move", "immediate possession"])).astype(int)

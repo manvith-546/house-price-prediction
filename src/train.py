@@ -29,7 +29,7 @@ import pandas as pd
 import sklearn
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import Lasso, LinearRegression, Ridge
@@ -170,11 +170,13 @@ def build_preprocessor():
         ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
     ])
     other_numeric = [c for c in NUMERIC_FEATURES if c != "total_sqft"]
+    # Output a DataFrame so a model can refer to a column by name
+    # (the boosting model needs "area__total_sqft" for its monotonic rule).
     return ColumnTransformer([
         ("area", area, ["total_sqft"]),
         ("num", numeric, other_numeric),
         ("cat", categorical, CATEGORICAL_FEATURES),
-    ])
+    ]).set_output(transform="pandas")
 
 
 def make_pipeline(regressor):
@@ -190,8 +192,13 @@ MODELS = {
     "Decision Tree": DecisionTreeRegressor(max_depth=12, min_samples_leaf=5, random_state=RANDOM_STATE),
     "Random Forest": RandomForestRegressor(n_estimators=200, min_samples_leaf=2,
                                            n_jobs=-1, random_state=RANDOM_STATE),
-    "Gradient Boosting": GradientBoostingRegressor(n_estimators=300, learning_rate=0.1,
-                                                   max_depth=4, random_state=RANDOM_STATE),
+    # Trees can make price dip when the area grows a little. The monotonic rule
+    # says: with everything else equal, a bigger house is never cheaper.
+    # min_samples_leaf is kept small so the model can still learn the smaller localities.
+    "Gradient Boosting": HistGradientBoostingRegressor(
+        max_iter=400, learning_rate=0.05, max_depth=8, min_samples_leaf=3,
+        max_leaf_nodes=None, l2_regularization=1.0, early_stopping=False,
+        monotonic_cst={"area__total_sqft": 1}, random_state=RANDOM_STATE),
 }
 
 PARAM_GRIDS = {
@@ -203,9 +210,9 @@ PARAM_GRIDS = {
     "Random Forest": {"model__regressor__n_estimators": [200, 400],
                       "model__regressor__max_features": [0.5, 1.0],
                       "model__regressor__min_samples_leaf": [1, 3]},
-    "Gradient Boosting": {"model__regressor__n_estimators": [300, 600],
+    "Gradient Boosting": {"model__regressor__max_iter": [400, 800],
                           "model__regressor__learning_rate": [0.05, 0.1],
-                          "model__regressor__max_depth": [3, 4]},
+                          "model__regressor__min_samples_leaf": [3, 5]},
 }
 
 

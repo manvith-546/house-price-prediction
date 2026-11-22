@@ -176,7 +176,7 @@ def model_page():
     figures = sorted(p.name for p in FIGURES_DIR.glob("*.png")) if FIGURES_DIR.exists() else []
     importance = info.get("feature_importance", {})
     return render_template("model.html", info=info, figures=figures,
-                           importance=[(FEATURE_NAMES.get(k, k), max(v, 0)) for k, v in importance.items()],
+                           importance=[(FEATURE_NAMES.get(k, k), abs(max(v, 0))) for k, v in importance.items()],
                            max_importance=max([v for v in importance.values()] + [1e-9]),
                            host_url=request.host_url.rstrip("/"))
 

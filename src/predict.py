@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = ROOT / "models" / "house_price_model.joblib"
 INFO_PATH = ROOT / "models" / "model_info.json"
 
-LIMITS = {  # sensible input ranges
+LIMITS = {  # sensible input ranges (keep in sync with MIN_SQFT/MAX_* in data_prep.py)
     "total_sqft": (300, 30000),
     "bhk": (1, 10),
     "bath": (1, 12),

@@ -34,13 +34,6 @@
       "args": ["-m", "unittest", "discover", "tests", "-v"],
       "group": { "kind": "test", "isDefault": true },
       "problemMatcher": []
-    },
-    {
-      "label": "Re-create dataset",
-      "type": "shell",
-      "command": "${command:python.interpreterPath}",
-      "args": ["data/generate_dataset.py"],
-      "problemMatcher": []
     }
   ]
 }

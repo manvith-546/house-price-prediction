@@ -31,18 +31,20 @@
   {% if info.comparison %}
   <section class="block">
     <h2>Models compared</h2>
-    <p class="hint">Six regression models were trained on the same data. The one with the best cross-validation score is used.</p>
-    {% set best_r2 = info.comparison|map(attribute="Test_R2")|max %}
+    <p class="hint">Six regression models were trained on the same data. They are ranked by cross-validation, which averages
+      five different splits and is more reliable than a single test split. The best one is used. Avg error is measured
+      on the test houses.</p>
+    {% set best_r2 = info.comparison|map(attribute="CV_R2_mean")|max %}
     <table class="data-table">
-      <thead><tr><th scope="col">Model</th><th scope="col">R² on test houses</th><th scope="col" class="num">Avg error</th></tr></thead>
+      <thead><tr><th scope="col">Model</th><th scope="col">Cross-validation R²</th><th scope="col" class="num">Avg error</th></tr></thead>
       <tbody>
         {% for m in info.comparison %}
         <tr{% if m.Model == info.model_name %} class="is-chosen"{% endif %}>
           <td>{{ m.Model }}{% if m.Model == info.model_name %} <span class="badge">Chosen</span>{% endif %}</td>
           <td>
             <span class="rate">
-              <span class="microbar wide"><span style="width: {{ ([m.Test_R2, 0]|max / best_r2 * 100)|round(1) }}%"></span></span>
-              <span class="rate-num">{{ "%.3f"|format(m.Test_R2) }}</span>
+              <span class="microbar wide"><span style="width: {{ ([m.CV_R2_mean, 0]|max / best_r2 * 100)|round(1) }}%"></span></span>
+              <span class="rate-num">{{ "%.3f"|format(m.CV_R2_mean) }}</span>
             </span>
           </td>
           <td class="num">{{ "%.1f"|format(m.Test_MAPE_percent) }}%</td>
@@ -133,9 +135,10 @@ print(r.json()["price_text"])</code></pre>
 
 <section class="block about-data">
   <h2>About the data</h2>
-  <p>The model uses the columns of the public Kaggle “Bengaluru House Price Data” set: area type, availability,
-    location, size, society, total area, bathrooms, balconies and price (in lakh). The repository ships with a synthetic
-    sample in that format so it runs offline. To use the real listings, replace <code>data/Bengaluru_House_Data.csv</code>
-    with the Kaggle file and run <code>python src/train.py</code>.</p>
+  <p>The model learned from the public Kaggle “Bengaluru House Price Data” set: 13,320 listings with area type,
+    availability, location, size, society, total area, bathrooms, balconies and price (in lakh). These are asking
+    prices from listings, not final sale prices, and they leave out details such as floor, building age and amenities,
+    so treat each estimate as a guide. To retrain on a different file with the same columns, replace
+    <code>data/Bengaluru_House_Data.csv</code> and run <code>python src/train.py</code>.</p>
 </section>
 {% endblock %}
